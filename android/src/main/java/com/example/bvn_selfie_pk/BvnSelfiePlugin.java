@@ -42,7 +42,7 @@ public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, Activi
     final String[] storge_permissions_33 = {
             Manifest.permission.CAMERA
     };
-    public static String permission[];
+    public static String[] permission;
 
 
     @Override
@@ -105,38 +105,32 @@ public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, Activi
     }
 
     @Override
-    public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
-        flutterActivity = binding.getActivity();
-        checkPermissionStatus();
-    }
-
-    @Override
-    public void onDetachedFromActivityForConfigChanges() {
-
-    }
-
-    @Override
-    public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
-    }
-
-    @Override
     public void onDetachedFromActivity() {
         destroy();
     }
 
     @Override
-    public boolean onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+    public boolean onRequestPermissionsResult(int requestCode,
+                                              @NonNull String[] permissions,
+                                              @NonNull int[] grantResults) {
         if (requestCode == 1114 && grantResults.length > 0) {
-            for (int x = 0; x < grantResults.length; x++) {
-                if (grantResults[x] != PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(flutterActivity.getApplicationContext(), "Permission Not Yet Granted.", Toast.LENGTH_LONG).show();
-                    return false;
+            for (int grantResult : grantResults) {
+                if (grantResult != PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(flutterActivity.getApplicationContext(),
+                            "Permission Not Yet Granted.",
+                            Toast.LENGTH_LONG).show();
+                    return true;
                 }
             }
+
             initializeService();
-            Toast.makeText(flutterActivity.getApplicationContext(), "Permission Granted.", Toast.LENGTH_LONG).show();
+            Toast.makeText(flutterActivity.getApplicationContext(),
+                    "Permission Granted.",
+                    Toast.LENGTH_LONG).show();
+            return true;
         }
-        return false;
+
+        return false; // not our requestCode, let others handle it
     }
 
     void initializeService() {

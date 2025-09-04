@@ -1,7 +1,7 @@
 package com.example.bvn_selfie_pk;
 
 public interface BVNCallbacks {
-    void onTextTureCreated(String val,long textureId);
+    void onTextTureCreated(long textureId);
     void gestureCallBack(String methodName,int id);
     void actionCallBack(int action);
     void onProgressChanged(int count);

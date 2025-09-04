@@ -4,10 +4,10 @@ import static androidx.core.content.ContextCompat.getMainExecutor;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.SurfaceTexture;
 import android.media.Image;
 import android.os.Build;
-import android.os.Environment;
 import android.util.DisplayMetrics;
 import android.util.Size;
 import android.view.Surface;
@@ -22,13 +22,11 @@ import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
-import androidx.camera.core.SurfaceRequest;
+import androidx.camera.core.resolutionselector.AspectRatioStrategy;
+import androidx.camera.core.resolutionselector.ResolutionSelector;
+import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
-import androidx.core.util.Consumer;
 import androidx.lifecycle.LifecycleOwner;
-
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
@@ -44,17 +42,13 @@ import java.util.concurrent.Executors;
 
 public class VerificationService implements ImageAnalysis.Analyzer {
 
-    private SurfaceTexture surfaceTexture;
-    private Activity pluginActivity;
-    private int cameraSelector = CameraSelector.LENS_FACING_FRONT;
-    private ImageAnalysis imageAnalysis;
+    private final SurfaceTexture surfaceTexture;
+    private final Activity pluginActivity;
     ProcessCameraProvider processCameraProvider;
     private ListenableFuture<ProcessCameraProvider> cameraProvider;
     ImageCapture imageCapture;
-    private long textureId;
-    private BVNCallbacks callbacks;
-    private double RATIO_4_3_VALUE = 4.0 / 3.0;
-    private double RATIO_16_9_VALUE = 16.0 / 9.0;
+    private final long textureId;
+    private final BVNCallbacks callbacks;
     int counter = 0;
     private int step = 1;
 
@@ -79,15 +73,12 @@ public class VerificationService implements ImageAnalysis.Analyzer {
             try {
                 processCameraProvider = cameraProvider.get();
                 startCamerax(processCameraProvider);
-            } catch (ExecutionException ex) {
-                ex.printStackTrace();
-            } catch (InterruptedException ex) {
+            } catch (ExecutionException | InterruptedException ex) {
                 ex.printStackTrace();
             }
         }, getMainExecutor(pluginActivity));
     }
 
-    @SuppressLint({"RestrictedApi", "UnsafeOptInUsageError"})
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void startCamerax(ProcessCameraProvider cameraProvider) {
 
@@ -99,40 +90,52 @@ public class VerificationService implements ImageAnalysis.Analyzer {
         CameraSelector cameraSelector = new CameraSelector.Builder().
                 requireLensFacing(CameraSelector.LENS_FACING_FRONT)
                 .build();
-        //preview used case
+
+
+        var resolutionSelector =
+                new ResolutionSelector.Builder()
+                        .setAspectRatioStrategy(
+                                new AspectRatioStrategy(
+                                        screenAspectRatio, // AspectRatio.RATIO_16_9 or RATIO_4_3
+                                        AspectRatioStrategy.FALLBACK_RULE_AUTO
+                                )
+                        )
+                        .build();
+
         Preview preview = new Preview.Builder()
-                .setTargetAspectRatio(screenAspectRatio)
+                .setResolutionSelector(resolutionSelector)
                 .build();
 
-        preview.setSurfaceProvider(new Preview.SurfaceProvider() {
-            @Override
-            public void onSurfaceRequested(@NonNull SurfaceRequest request) {
-                surfaceTexture.setDefaultBufferSize(width, height);
-                Surface surface = new Surface(surfaceTexture);
-                request.provideSurface(surface, getMainExecutor(pluginActivity), new Consumer<SurfaceRequest.Result>() {
-                    @Override
-                    public void accept(SurfaceRequest.Result result) {
-                        // Handle the SurfaceRequest.Result if needed
-                    }
-                });
-            }
-
+        preview.setSurfaceProvider(request -> {
+            surfaceTexture.setDefaultBufferSize(width, height);
+            Surface surface = new Surface(surfaceTexture);
+            request.provideSurface(surface, getMainExecutor(pluginActivity), result -> { });
         });
 
-        imageAnalysis =
-                new ImageAnalysis.Builder()
-                        .setTargetResolution(new Size(width, height))
-                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .build();
+
+
+        resolutionSelector = new ResolutionSelector.Builder()
+                .setResolutionStrategy(
+                        new ResolutionStrategy(
+                                new Size(width, height),  // Preferred resolution
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                        )
+                )
+                .build();
+
+        ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
+                .setResolutionSelector(resolutionSelector)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build();
         imageAnalysis.setAnalyzer(getMainExecutor(pluginActivity), this);
         //image capture used case
         imageCapture = new ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_ZERO_SHUTTER_LAG)
-                .setJpegQuality(50)
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setJpegQuality(80)
                 .build();
         cameraProvider.bindToLifecycle((LifecycleOwner) pluginActivity, cameraSelector, preview, imageCapture, imageAnalysis);
-        callbacks.onTextTureCreated("ready", textureId);
+        callbacks.onTextTureCreated(textureId);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
@@ -153,20 +156,14 @@ public class VerificationService implements ImageAnalysis.Analyzer {
             FaceDetector detector = FaceDetection.getClient(realTimeOpts);
             detector.process(inputImage)
                     .addOnSuccessListener(
-                            new OnSuccessListener<List<Face>>() {
-                                @Override
-                                public void onSuccess(List<Face> faces) {
-                                    processFacials(faces);
-                                    image.close();
-                                }
+                            faces -> {
+                                processFacials(faces);
+                                image.close();
                             })
                     .addOnFailureListener(
-                            new OnFailureListener() {
-                                @Override
-                                public void onFailure(@NonNull Exception e) {
-                                    System.out.println("failed");
-                                    image.close();
-                                }
+                            e -> {
+                                System.out.println("failed");
+                                image.close();
                             });
 
         }
@@ -174,26 +171,26 @@ public class VerificationService implements ImageAnalysis.Analyzer {
     }
 
     private DisplayMetrics getDisplay() {
-        WindowManager wm = null;
-        wm = (WindowManager) pluginActivity.getApplicationContext().getSystemService(pluginActivity.getApplicationContext().WINDOW_SERVICE);
+        var wm = (WindowManager) pluginActivity.getApplicationContext().getSystemService(Context.WINDOW_SERVICE);
         final DisplayMetrics displayMetrics = new DisplayMetrics();
         wm.getDefaultDisplay().getMetrics(displayMetrics);
         return displayMetrics;
     }
 
     public int aspectRatio(int width, int height) {
-        double previewRatio = Double.valueOf(Math.max(width, height)) / Math.min(width, height);
+        double previewRatio = (double) Math.max(width, height) / Math.min(width, height);
+        double RATIO_16_9_VALUE = 16.0 / 9.0;
+        double RATIO_4_3_VALUE = 4.0 / 3.0;
         if (Math.abs(previewRatio - RATIO_4_3_VALUE) <= Math.abs(previewRatio - RATIO_16_9_VALUE)) {
             return AspectRatio.RATIO_4_3;
         }
         return AspectRatio.RATIO_16_9;
     }
 
-    @SuppressLint("UnsafeOptInUsageError")
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public void processFacials(List<Face> faces) {
 
-        if (faces.size() == 0) {
+        if (faces.isEmpty()) {
 
             callbacks.gestureCallBack(Helps.facialGesture, Helps.NO_FACE_DETECTED);
             return;
@@ -249,7 +246,7 @@ public class VerificationService implements ImageAnalysis.Analyzer {
                 new ImageCapture.OnImageSavedCallback() {
                     @Override
                     public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
-                        // Image saved successfully
+                        assert outputFileResults.getSavedUri() != null;
                         callbacks.onImageCapture(outputFileResults.getSavedUri().getPath());
                     }
 
@@ -263,78 +260,42 @@ public class VerificationService implements ImageAnalysis.Analyzer {
     private boolean checkNeutralFace(Face face) {
         if (face.getSmilingProbability() != null) {
             float smileProb = face.getSmilingProbability();
-            float rightEyeOpenProb = face.getRightEyeOpenProbability();
-            float leftEyeOpenProb = face.getLeftEyeOpenProbability();
+            float rightEyeOpenProb = face.getRightEyeOpenProbability() != null ? face.getRightEyeOpenProbability() : 0;
+            float leftEyeOpenProb = face.getLeftEyeOpenProbability() != null ? face.getLeftEyeOpenProbability() : 0;
 
-            // Consider a face neutral when smiling probability is low
-            // but not extremely low (which might be a frown)
-            // while both eyes are open
-            if (smileProb >= 0.01 && smileProb <= 0.1 && leftEyeOpenProb > 0.5 && rightEyeOpenProb > 0.5) {
-                return true;
-            }
+            return smileProb >= 0.01 && smileProb <= 0.1 && leftEyeOpenProb > 0.5 && rightEyeOpenProb > 0.5;
         }
         return false;
     }
 
     private boolean checkSmileAndBlink(Face face) {
+        var smileProb = face.getSmilingProbability();
+        var rightEyeOpenProb = face.getRightEyeOpenProbability();
+        var leftEyeOpenProb = face.getLeftEyeOpenProbability();
 
-        if (face.getSmilingProbability() != null && face.getRightEyeOpenProbability() != null) {
-            float smileProb = face.getSmilingProbability();
-            float rightEyeOpenProb = face.getRightEyeOpenProbability();
-            float leftEyeOpenProb = face.getLeftEyeOpenProbability();
-            if (smileProb > 0.7 && leftEyeOpenProb > 0.5 && rightEyeOpenProb > 0.5) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean checkFrown(Face face) {
-        if (face.getSmilingProbability() != null) {
-            float smileProb = face.getSmilingProbability();
-
-            if (smileProb < 0.55) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean closeAndOpen(Face face) {
-        if (face.getLeftEyeOpenProbability() != null) {
-            float leftEyeOpenProb = face.getLeftEyeOpenProbability();
-            if (leftEyeOpenProb < 0.85) {
-                return true;
-            }
+        if (leftEyeOpenProb != null && rightEyeOpenProb != null && smileProb != null) {
+            return smileProb > 0.7 && leftEyeOpenProb > 0.5 && rightEyeOpenProb > 0.5;
         }
         return false;
     }
 
     private boolean rotateHead(Face face) {
         float degreesZ = face.getHeadEulerAngleZ();
-        if (degreesZ > 3) {
-            return true;
-        }
-        return false;
+        return degreesZ > 3;
     }
 
     private File saveFile() {
 
-        File directory = pluginActivity.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File directory = pluginActivity.getCacheDir();
         Date date = new Date();
         String timestamp = String.valueOf(date.getTime());
         String path = directory.getAbsolutePath() + "/" + timestamp + ".jpeg";
-        File file = new File(path);
-        return file;
+        return new File(path);
     }
 
-    @SuppressLint("RestrictedApi")
     public void dispose() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             processCameraProvider.unbindAll();
-            processCameraProvider.shutdown();
-            //  surfaceTexture.release();
-            //  surfaceTexture.detachFromGLContext();
         }
     }
 }
