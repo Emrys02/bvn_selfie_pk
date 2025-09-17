@@ -22,11 +22,12 @@ import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry;
 import io.flutter.view.TextureRegistry;
 
-
 /**
  * BvnSelfiePlugin
  */
-public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegistry.RequestPermissionsResultListener, BVNCallbacks {
+public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, ActivityAware,
+        PluginRegistry.RequestPermissionsResultListener, BVNCallbacks {
+
     private MethodChannel channel;
     private Activity flutterActivity;
     private SurfaceTexture surfaceTexture;
@@ -44,7 +45,6 @@ public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, Activi
     };
     public static String[] permission;
 
-
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -57,16 +57,49 @@ public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, Activi
         channel.setMethodCallHandler(this);
     }
 
+    @Override
+    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        channel.setMethodCallHandler(null);
+    }
+
+    // ----------------------------
+    // ActivityAware implementation
+    // ----------------------------
+
+    @Override
+    public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
+        flutterActivity = binding.getActivity();
+        binding.addRequestPermissionsResultListener(this);
+    }
+
+    @Override
+    public void onDetachedFromActivityForConfigChanges() {
+        destroy();
+    }
+
+    @Override
+    public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
+        onAttachedToActivity(binding); // reinitialize with the new activity after config change
+    }
+
+    @Override
+    public void onDetachedFromActivity() {
+        destroy();
+    }
+
+    // ----------------------------
+    // Permissions + camera logic
+    // ----------------------------
+
     boolean checkPermissionStatus() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            for (int x = 0; x < permission.length; x++) {
-                if (flutterActivity.checkSelfPermission(permission[x]) == PackageManager.PERMISSION_DENIED) {
+            for (String perm : permission) {
+                if (flutterActivity.checkSelfPermission(perm) == PackageManager.PERMISSION_DENIED) {
                     flutterActivity.requestPermissions(permission, 1114);
                     return false;
                 }
             }
             return true;
-
         }
         return true;
     }
@@ -81,7 +114,8 @@ public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, Activi
                 return;
             }
             channel.invokeMethod("permission_not_accepted", new HashMap[]{});
-            Toast.makeText(flutterActivity.getApplicationContext(), "Permission Not Granted... Please Accept Permission.", Toast.LENGTH_LONG).show();
+            Toast.makeText(flutterActivity.getApplicationContext(),
+                    "Permission Not Granted... Please Accept Permission.", Toast.LENGTH_LONG).show();
             return;
         }
         if (call.method.equals(Helps.takePhoto)) {
@@ -92,21 +126,9 @@ public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, Activi
         if (call.method.equals("destroyer")) {
             destroy();
             result.success("good");
-            return;
-
         } else {
             result.notImplemented();
         }
-    }
-
-    @Override
-    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
-        channel.setMethodCallHandler(null);
-    }
-
-    @Override
-    public void onDetachedFromActivity() {
-        destroy();
     }
 
     @Override
@@ -117,19 +139,15 @@ public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, Activi
             for (int grantResult : grantResults) {
                 if (grantResult != PackageManager.PERMISSION_GRANTED) {
                     Toast.makeText(flutterActivity.getApplicationContext(),
-                            "Permission Not Yet Granted.",
-                            Toast.LENGTH_LONG).show();
+                            "Permission Not Yet Granted.", Toast.LENGTH_LONG).show();
                     return true;
                 }
             }
-
             initializeService();
             Toast.makeText(flutterActivity.getApplicationContext(),
-                    "Permission Granted.",
-                    Toast.LENGTH_LONG).show();
+                    "Permission Granted.", Toast.LENGTH_LONG).show();
             return true;
         }
-
         return false; // not our requestCode, let others handle it
     }
 
@@ -140,19 +158,23 @@ public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, Activi
     }
 
     private void destroy() {
-
         if (surfaceTexture != null) {
             verificationService.dispose();
-            // surfaceTexture.release();
+            // surfaceTexture.release(); // Uncomment if you want to free SurfaceTexture explicitly
         }
     }
 
+    // ----------------------------
+    // BVNCallbacks implementation
+    // ----------------------------
+
     @Override
-    public void onTextTureCreated(String val, long textureId) {
+    public void onTextTureCreated(long textureId) {
         HashMap<String, Object> hashMap = new HashMap<>();
         hashMap.put("textureId", textureId);
         channel.invokeMethod("showTextureView", hashMap);
     }
+
 
     @Override
     public void gestureCallBack(String methodName, int id) {
@@ -170,41 +192,28 @@ public class BvnSelfiePlugin implements FlutterPlugin, MethodCallHandler, Activi
 
     @Override
     public void onProgressChanged(int count) {
-        flutterActivity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                HashMap<String, Object> hashMap = new HashMap<>();
-                hashMap.put("progress", count);
-                channel.invokeMethod(Helps.onProgressChange, hashMap);
-            }
+        flutterActivity.runOnUiThread(() -> {
+            HashMap<String, Object> hashMap = new HashMap<>();
+            hashMap.put("progress", count);
+            channel.invokeMethod(Helps.onProgressChange, hashMap);
         });
-
     }
 
     @Override
     public void onImageCapture(String imagePath) {
-        flutterActivity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                HashMap<String, Object> hashMap = new HashMap<>();
-                hashMap.put("imagePath", imagePath);
-                channel.invokeMethod(Helps.imageCapture, hashMap);
-            }
+        flutterActivity.runOnUiThread(() -> {
+            HashMap<String, Object> hashMap = new HashMap<>();
+            hashMap.put("imagePath", imagePath);
+            channel.invokeMethod(Helps.imageCapture, hashMap);
         });
-
     }
 
     @Override
     public void onError(String error) {
-
-        flutterActivity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                HashMap<String, Object> hashMap = new HashMap<>();
-                hashMap.put("error", error);
-                channel.invokeMethod(Helps.onError, hashMap);
-            }
+        flutterActivity.runOnUiThread(() -> {
+            HashMap<String, Object> hashMap = new HashMap<>();
+            hashMap.put("error", error);
+            channel.invokeMethod(Helps.onError, hashMap);
         });
-
     }
 }

@@ -1,6 +1,6 @@
 name: bvn_selfie_pk
 description: A plugin for liveness check.
-version: 0.0.2
+version: 1.0.0
 homepage:
 
 environment:
