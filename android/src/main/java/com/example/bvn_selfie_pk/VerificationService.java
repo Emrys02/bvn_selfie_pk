@@ -132,7 +132,7 @@ public class VerificationService implements ImageAnalysis.Analyzer {
         //image capture used case
         imageCapture = new ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                .setJpegQuality(80)
+                .setJpegQuality(50)
                 .build();
         cameraProvider.bindToLifecycle((LifecycleOwner) pluginActivity, cameraSelector, preview, imageCapture, imageAnalysis);
         callbacks.onTextTureCreated(textureId);
