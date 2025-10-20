@@ -117,14 +117,14 @@ public class VerificationService implements ImageAnalysis.Analyzer {
         });
 
 
-        resolutionSelector = new ResolutionSelector.Builder()
-                .setResolutionStrategy(
-                        new ResolutionStrategy(
-                                new Size(width, height),  // Preferred resolution
-                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
-                        )
-                )
-                .build();
+//        resolutionSelector = new ResolutionSelector.Builder()
+//                .setResolutionStrategy(
+//                        new ResolutionStrategy(
+//                                new Size(width, height),  // Preferred resolution
+//                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+//                        )
+//                )
+//                .build();
 
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
                 .setResolutionSelector(resolutionSelector)
