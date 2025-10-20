@@ -88,7 +88,6 @@ public class VerificationService implements ImageAnalysis.Analyzer {
 
         int height = getDisplay().heightPixels;
         int width = getDisplay().widthPixels;
-        int screenAspectRatio = aspectRatio(width, height);
 
         cameraProvider.unbindAll();
         CameraSelector cameraSelector = new CameraSelector.Builder().
@@ -100,7 +99,7 @@ public class VerificationService implements ImageAnalysis.Analyzer {
                 new ResolutionSelector.Builder()
                         .setAspectRatioStrategy(
                                 new AspectRatioStrategy(
-                                        screenAspectRatio, // AspectRatio.RATIO_16_9 or RATIO_4_3
+                                        AspectRatio.RATIO_DEFAULT,
                                         AspectRatioStrategy.FALLBACK_RULE_AUTO
                                 )
                         )
@@ -181,17 +180,6 @@ public class VerificationService implements ImageAnalysis.Analyzer {
         wm.getDefaultDisplay().getMetrics(displayMetrics);
         return displayMetrics;
     }
-
-    public int aspectRatio(int width, int height) {
-        double previewRatio = (double) Math.max(width, height) / Math.min(width, height);
-        double RATIO_16_9_VALUE = 16.0 / 9.0;
-        double RATIO_4_3_VALUE = 4.0 / 3.0;
-        if (Math.abs(previewRatio - RATIO_4_3_VALUE) <= Math.abs(previewRatio - RATIO_16_9_VALUE)) {
-            return AspectRatio.RATIO_4_3;
-        }
-        return AspectRatio.RATIO_16_9;
-    }
-
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public void processFacials(List<Face> faces) {
 
