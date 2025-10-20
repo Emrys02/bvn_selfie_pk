@@ -14,9 +14,11 @@ import android.view.Surface;
 import android.view.WindowManager;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.OptIn;
 import androidx.annotation.RequiresApi;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ExperimentalImageCaptureOutputFormat;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
@@ -79,6 +81,7 @@ public class VerificationService implements ImageAnalysis.Analyzer {
         }, getMainExecutor(pluginActivity));
     }
 
+    @OptIn(markerClass = ExperimentalImageCaptureOutputFormat.class)
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void startCamerax(ProcessCameraProvider cameraProvider) {
 
@@ -131,8 +134,9 @@ public class VerificationService implements ImageAnalysis.Analyzer {
         imageAnalysis.setAnalyzer(getMainExecutor(pluginActivity), this);
         //image capture used case
         imageCapture = new ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                .setJpegQuality(50)
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                .setOutputFormat(ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR)
+                .setJpegQuality(100)
                 .build();
         cameraProvider.bindToLifecycle((LifecycleOwner) pluginActivity, cameraSelector, preview, imageCapture, imageAnalysis);
         callbacks.onTextTureCreated(textureId);
