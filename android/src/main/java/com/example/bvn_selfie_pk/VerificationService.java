@@ -99,7 +99,7 @@ public class VerificationService implements ImageAnalysis.Analyzer {
                 new ResolutionSelector.Builder()
                         .setAspectRatioStrategy(
                                 new AspectRatioStrategy(
-                                        AspectRatio.RATIO_DEFAULT,
+                                        AspectRatio.RATIO_16_9,
                                         AspectRatioStrategy.FALLBACK_RULE_AUTO
                                 )
                         )
