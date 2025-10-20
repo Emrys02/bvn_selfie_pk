@@ -29,6 +29,7 @@ import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.lifecycle.LifecycleOwner;
+
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.Face;
@@ -112,9 +113,9 @@ public class VerificationService implements ImageAnalysis.Analyzer {
         preview.setSurfaceProvider(request -> {
             surfaceTexture.setDefaultBufferSize(width, height);
             Surface surface = new Surface(surfaceTexture);
-            request.provideSurface(surface, getMainExecutor(pluginActivity), result -> { });
+            request.provideSurface(surface, getMainExecutor(pluginActivity), result -> {
+            });
         });
-
 
 
         resolutionSelector = new ResolutionSelector.Builder()
@@ -135,7 +136,7 @@ public class VerificationService implements ImageAnalysis.Analyzer {
         //image capture used case
         imageCapture = new ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                .setOutputFormat(ImageCapture.OUTPUT_FORMAT_JPEG_ULTRA_HDR)
+                .setOutputFormat(ImageCapture.OUTPUT_FORMAT_JPEG)
                 .setJpegQuality(100)
                 .build();
         cameraProvider.bindToLifecycle((LifecycleOwner) pluginActivity, cameraSelector, preview, imageCapture, imageAnalysis);
