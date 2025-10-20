@@ -18,6 +18,7 @@ import androidx.annotation.OptIn;
 import androidx.annotation.RequiresApi;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ExperimentalGetImage;
 import androidx.camera.core.ExperimentalImageCaptureOutputFormat;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
@@ -82,7 +83,6 @@ public class VerificationService implements ImageAnalysis.Analyzer {
         }, getMainExecutor(pluginActivity));
     }
 
-    @OptIn(markerClass = ExperimentalImageCaptureOutputFormat.class)
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void startCamerax(ProcessCameraProvider cameraProvider) {
 
@@ -129,24 +129,24 @@ public class VerificationService implements ImageAnalysis.Analyzer {
 
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
                 .setResolutionSelector(resolutionSelector)
-                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build();
         imageAnalysis.setAnalyzer(getMainExecutor(pluginActivity), this);
         //image capture used case
         imageCapture = new ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                .setOutputFormat(ImageCapture.OUTPUT_FORMAT_JPEG)
                 .setJpegQuality(100)
                 .build();
         cameraProvider.bindToLifecycle((LifecycleOwner) pluginActivity, cameraSelector, preview, imageCapture, imageAnalysis);
         callbacks.onTextTureCreated(textureId);
     }
 
+    @OptIn(markerClass = ExperimentalGetImage.class)
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public void analyze(@NonNull ImageProxy image) {
-        @SuppressLint("UnsafeOptInUsageError") Image mediaImage = image.getImage();
+        Image mediaImage = image.getImage();
         if (mediaImage != null) {
             InputImage inputImage =
                     InputImage.fromMediaImage(mediaImage, image.getImageInfo().getRotationDegrees());
@@ -268,7 +268,7 @@ public class VerificationService implements ImageAnalysis.Analyzer {
             float rightEyeOpenProb = face.getRightEyeOpenProbability() != null ? face.getRightEyeOpenProbability() : 0;
             float leftEyeOpenProb = face.getLeftEyeOpenProbability() != null ? face.getLeftEyeOpenProbability() : 0;
 
-            return smileProb >= 0.01 && smileProb <= 0.1 && leftEyeOpenProb > 0.5 && rightEyeOpenProb > 0.5;
+            return smileProb <= 0.3 && leftEyeOpenProb > 0.5 && rightEyeOpenProb > 0.5;
         }
         return false;
     }
